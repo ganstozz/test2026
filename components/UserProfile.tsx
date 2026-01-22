@@ -1,38 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDb';
-import { User, Transaction, Order } from '../types';
-import { Wallet, Plus, Copy, Check, ShoppingBag } from 'lucide-react';
+import { User, Order } from '../types';
+import { Wallet, Plus, Copy, Check, ShoppingBag, Loader2 } from 'lucide-react';
 
-const UserProfile: React.FC = () => {
-  const [user, setUser] = useState<User>(db.getUser());
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+interface ProfileProps {
+  user: User;
+  onRefresh: () => void;
+}
+
+const UserProfile: React.FC<ProfileProps> = ({ user, onRefresh }) => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(10);
-  const [activeTab, setActiveTab] = useState<'history' | 'orders'>('orders');
-
-  // Copy feedback state
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    refreshData();
-  }, []);
+    const load = async () => {
+      try {
+        const data = await db.getOrders(user.id);
+        setOrders(data);
+      } catch (err) {
+        console.error("Order load error", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [user.id]);
 
-  const refreshData = () => {
-    setUser(db.getUser());
-    setTransactions(db.getTransactions());
-    setOrders(db.getOrders());
-  };
-
-  const handleTopUp = () => {
-    db.deposit(topUpAmount);
+  const handleTopUp = async () => {
+    setLoading(true);
+    await db.deposit(user.id, topUpAmount);
     setShowTopUp(false);
-    refreshData();
-  };
-
-  const toggleAdmin = () => {
-    db.toggleAdminMode();
-    refreshData();
+    onRefresh();
+    setLoading(false);
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -42,151 +44,70 @@ const UserProfile: React.FC = () => {
   };
 
   return (
-    <div className="pb-24 pt-8 px-4">
-      {/* Profile Card */}
-      <div className="bg-gradient-to-br from-brand-600 to-indigo-800 rounded-3xl p-6 text-white shadow-xl shadow-brand-500/20 relative overflow-hidden">
-        {/* Decorative Circles */}
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="absolute top-20 -left-10 w-20 h-20 bg-black/10 rounded-full blur-xl"></div>
-
-        <div className="relative z-10 flex items-center gap-4">
-          <img src={user.avatarUrl} className="w-16 h-16 rounded-full border-2 border-white/30" alt="Avatar" />
+    <div className="pb-32 pt-6 px-4">
+      <div className="bg-gradient-to-br from-brand-600 to-indigo-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
+        <div className="relative z-10 flex items-center gap-5">
+          <img src={user.avatarUrl} className="w-16 h-16 rounded-3xl border-2 border-white/20 shadow-lg" alt="" />
           <div>
-            <h2 className="text-xl font-bold">{user.username}</h2>
-            <div className="flex flex-col gap-1 mt-1 opacity-80 cursor-pointer" onClick={toggleAdmin}>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded text-white font-mono">ID: {user.id}</span>
-                    {user.isAdmin && <span className="text-xs bg-yellow-500/80 px-2 py-0.5 rounded text-black font-bold">ADMIN</span>}
-                </div>
-                {!user.isAdmin && <span className="text-[10px] text-brand-200 opacity-60">(Tap ID to manage store)</span>}
+            <h2 className="text-xl font-black">{user.username}</h2>
+            <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded-full font-bold">UID: {user.id.slice(0, 8)}</span>
+                {user.isAdmin && <span className="text-[9px] bg-yellow-400 px-2 py-0.5 rounded-full text-black font-black uppercase">Admin</span>}
             </div>
           </div>
         </div>
-
-        <div className="mt-8 relative z-10">
-          <p className="text-brand-100 text-sm font-medium mb-1">Total Balance</p>
-          <div className="flex justify-between items-end">
-             <h1 className="text-4xl font-bold">${user.balance.toFixed(2)}</h1>
-             <button 
-               onClick={() => setShowTopUp(true)}
-               className="bg-white text-brand-600 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-brand-50 transition-colors"
-             >
-               <Plus size={16} /> Top Up
+        <div className="mt-10 relative z-10 flex justify-between items-end">
+             <div>
+                <p className="text-brand-200 text-[10px] font-black uppercase tracking-widest mb-1">Ваш Баланс</p>
+                <h1 className="text-5xl font-black tracking-tighter">${user.balance}</h1>
+             </div>
+             <button onClick={() => setShowTopUp(true)} className="bg-white text-brand-600 p-3 rounded-2xl shadow-xl active:scale-90 transition-transform">
+                <Plus size={24} />
              </button>
-          </div>
+        </div>
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="mt-10">
+        <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-4 ml-1">Мои Покупки</h3>
+        <div className="space-y-4">
+            {loading ? (
+                <div className="flex justify-center py-10"><Loader2 className="animate-spin text-gray-800" /></div>
+            ) : orders.length > 0 ? orders.map(order => (
+                <div key={order.id} className="bg-gray-900/50 border border-gray-800 rounded-3xl p-5">
+                    <div className="flex justify-between items-start mb-4">
+                        <h4 className="font-bold text-white text-sm">{String(order.productTitle)}</h4>
+                        <span className="text-brand-400 font-black text-xs">${order.price}</span>
+                    </div>
+                    <div className="bg-black/40 rounded-2xl p-4 font-mono text-[11px] text-gray-400 relative border border-white/5 break-all">
+                        {String(order.deliveryData || '')}
+                        <button onClick={() => handleCopy(String(order.deliveryData || ''), order.id)} className="absolute top-2 right-2 p-2 bg-gray-800 rounded-xl hover:text-white">
+                            {copiedId === order.id ? <Check size={14} className="text-green-500"/> : <Copy size={14} />}
+                        </button>
+                    </div>
+                </div>
+            )) : (
+                <div className="text-center py-16 bg-gray-900/20 rounded-[2rem] border-2 border-dashed border-gray-900">
+                    <ShoppingBag size={40} className="mx-auto text-gray-800 mb-2 opacity-20" />
+                    <p className="text-gray-700 font-bold text-xs uppercase tracking-widest">Список пуст</p>
+                </div>
+            )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex mt-8 border-b border-gray-800">
-        <button 
-          onClick={() => setActiveTab('orders')}
-          className={`flex-1 pb-4 text-sm font-medium transition-colors relative ${activeTab === 'orders' ? 'text-white' : 'text-gray-500'}`}
-        >
-          My Orders
-          {activeTab === 'orders' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-brand-500 rounded-t-full"></div>}
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 pb-4 text-sm font-medium transition-colors relative ${activeTab === 'history' ? 'text-white' : 'text-gray-500'}`}
-        >
-          Transactions
-          {activeTab === 'history' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-brand-500 rounded-t-full"></div>}
-        </button>
-      </div>
-
-      {/* List */}
-      <div className="mt-6 space-y-4">
-        {activeTab === 'orders' ? (
-          orders.length > 0 ? orders.map(order => (
-            <div key={order.id} className="bg-gray-850 p-4 rounded-xl border border-gray-800">
-               <div className="flex justify-between items-start mb-2">
-                 <h4 className="font-semibold text-white">{order.productTitle}</h4>
-                 <span className="text-brand-400 font-mono text-sm">${order.price}</span>
-               </div>
-               <div className="bg-gray-900 rounded p-3 mb-2 font-mono text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap relative group">
-                  {order.deliveryData}
-                  <button 
-                    onClick={() => handleCopy(order.deliveryData || '', order.id)}
-                    className="absolute top-2 right-2 p-1.5 bg-gray-800 rounded hover:bg-gray-700 text-gray-300 transition-colors"
-                  >
-                    {copiedId === order.id ? <Check size={12} className="text-green-500"/> : <Copy size={12} />}
-                  </button>
-               </div>
-               <div className="flex justify-between items-center text-xs text-gray-600">
-                 <span>ID: {order.id}</span>
-                 <span>{new Date(order.date).toLocaleDateString()}</span>
-               </div>
-            </div>
-          )) : <div className="text-center text-gray-500 py-10">No orders yet</div>
-        ) : (
-          transactions.length > 0 ? transactions.map(tx => (
-            <div key={tx.id} className="flex justify-between items-center py-3 border-b border-gray-800 last:border-0">
-               <div className="flex items-center gap-3">
-                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'deposit' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                    {tx.type === 'deposit' ? <Wallet size={18} /> : <ShoppingBag size={18} />}
-                 </div>
-                 <div>
-                   <p className="text-white text-sm font-medium">{tx.description}</p>
-                   <p className="text-gray-500 text-xs">{new Date(tx.date).toLocaleDateString()}</p>
-                 </div>
-               </div>
-               <span className={`font-mono font-medium ${tx.type === 'deposit' ? 'text-green-400' : 'text-white'}`}>
-                 {tx.type === 'deposit' ? '+' : ''}{tx.amount.toFixed(2)}
-               </span>
-            </div>
-          )) : <div className="text-center text-gray-500 py-10">No transactions yet</div>
-        )}
-      </div>
-
-      {/* Top Up Modal */}
       {showTopUp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-gray-900 w-full max-w-sm rounded-3xl border border-gray-800 p-6">
-            <h3 className="text-xl font-bold text-white mb-2">Add Funds</h3>
-            <p className="text-gray-400 text-sm mb-6">Simulate a payment gateway transaction.</p>
-            
-            <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md px-6 animate-in fade-in duration-200">
+          <div className="bg-gray-950 w-full max-w-xs rounded-[2.5rem] border border-gray-800 p-8 shadow-2xl">
+            <h3 className="text-xl font-black text-white mb-6 text-center">Пополнение</h3>
+            <div className="grid grid-cols-2 gap-3 mb-8">
               {[10, 25, 50, 100].map(amt => (
-                <button 
-                  key={amt}
-                  onClick={() => setTopUpAmount(amt)}
-                  className={`py-3 rounded-xl border font-medium transition-all ${
-                    topUpAmount === amt 
-                      ? 'bg-brand-600 border-brand-500 text-white' 
-                      : 'border-gray-700 text-gray-400 hover:border-gray-500'
-                  }`}
-                >
-                  ${amt}
-                </button>
+                <button key={amt} onClick={() => setTopUpAmount(amt)} className={`py-4 rounded-2xl border-2 font-black transition-all ${topUpAmount === amt ? 'bg-brand-600 border-brand-500 text-white shadow-lg' : 'border-gray-900 text-gray-600'}`}>${amt}</button>
               ))}
             </div>
-            
-            <div className="mb-6">
-                 <label className="text-xs text-gray-500 mb-1 block">Custom Amount</label>
-                 <div className="relative">
-                    <span className="absolute left-4 top-3.5 text-gray-400">$</span>
-                    <input 
-                        type="number" 
-                        value={topUpAmount}
-                        onChange={(e) => setTopUpAmount(Number(e.target.value))}
-                        className="w-full bg-gray-800 text-white py-3 pl-8 pr-4 rounded-xl border border-gray-700 focus:border-brand-500 focus:outline-none"
-                    />
-                 </div>
-            </div>
-
-            <button 
-              onClick={handleTopUp}
-              className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl transition-colors"
-            >
-              Pay ${topUpAmount.toFixed(2)}
+            <button onClick={handleTopUp} disabled={loading} className="w-full bg-green-600 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                {loading ? <Loader2 className="animate-spin" size={20} /> : 'Пополнить баланс'}
             </button>
-            <button 
-              onClick={() => setShowTopUp(false)}
-              className="w-full mt-3 text-gray-500 py-2 text-sm hover:text-gray-300"
-            >
-              Cancel
-            </button>
+            <button onClick={() => setShowTopUp(false)} className="w-full mt-4 text-gray-600 text-[10px] font-black uppercase tracking-widest">Отмена</button>
           </div>
         </div>
       )}

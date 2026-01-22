@@ -1,230 +1,242 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../services/mockDb';
 import { Product, ProductCategory } from '../types';
-import { Plus, Trash2, Edit2, Package, Save, X, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Edit2, Package, Save, X, DollarSign, Upload, Image as ImageIcon, Loader2, Tag } from 'lucide-react';
 
 const AdminPanel: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     category: ProductCategory.STEAM,
     stock: 1,
-    imageUrl: `https://picsum.photos/400/400?random=${Math.floor(Math.random() * 1000)}`
   });
 
   useEffect(() => {
     refreshData();
   }, []);
 
-  const refreshData = () => {
-    setProducts(db.getProducts());
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      db.deleteProduct(id);
-      refreshData();
+  const refreshData = async () => {
+    try {
+      const data = await db.getProducts();
+      setProducts(data);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleSave = () => {
-    if (!formData.title || !formData.price) return alert('Title and Price are required');
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Файл слишком большой (max 5MB)");
+        return;
+      }
+      
+      setIsUploading(true);
+      try {
+        const publicUrl = await db.uploadImage(file);
+        setFormData(prev => ({ ...prev, imageUrl: publicUrl }));
+      } catch (err: any) {
+        console.error("Upload error details:", err);
+        alert(`Ошибка загрузки: ${err.message || 'Проверьте политики бакета'}`);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  };
+
+  const handleSave = async () => {
+    if (!formData.title || !formData.price || !formData.imageUrl) {
+        return alert('Заполните название, цену и загрузите фото');
+    }
     
-    const newProduct: Product = {
-      id: isEditing || Math.random().toString(36).substr(2, 9),
+    const productData: Omit<Product, 'id'> = {
       title: formData.title!,
       description: formData.description || '',
       price: Number(formData.price),
       category: formData.category || ProductCategory.STEAM,
       stock: Number(formData.stock),
-      imageUrl: formData.imageUrl || 'https://picsum.photos/400/400',
+      imageUrl: formData.imageUrl!,
       region: formData.region || 'Global',
       autoDeliveryData: formData.autoDeliveryData || ''
     };
 
-    if (isEditing) {
-      db.updateProduct(newProduct);
-    } else {
-      db.addProduct(newProduct);
-    }
-
-    setShowAddModal(false);
-    setIsEditing(null);
-    setFormData({ 
-        category: ProductCategory.STEAM, 
-        stock: 1,
-        imageUrl: `https://picsum.photos/400/400?random=${Math.floor(Math.random() * 1000)}`
-    });
-    refreshData();
-  };
-
-  const openEdit = (product: Product) => {
-    setFormData(product);
-    setIsEditing(product.id);
-    setShowAddModal(true);
-  };
-
-  const openAdd = () => {
+    try {
+      if (isEditing) {
+        await db.updateProduct(isEditing, productData);
+      } else {
+        await db.addProduct(productData);
+      }
+      setShowAddModal(false);
       setIsEditing(null);
-      setFormData({
-        category: ProductCategory.STEAM,
-        stock: 1,
-        imageUrl: `https://picsum.photos/400/400?random=${Math.floor(Math.random() * 1000)}`
-      });
-      setShowAddModal(true);
-  }
+      setFormData({ category: ProductCategory.STEAM, stock: 1 });
+      refreshData();
+    } catch (err: any) {
+      alert(`Ошибка сохранения: ${err.message}`);
+    }
+  };
 
   return (
-    <div className="pb-24 pt-6 px-4">
+    <div className="pb-32 pt-6 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Inventory</h2>
-          <p className="text-gray-400 text-sm">Manage store products</p>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Инвентарь</h2>
+          <p className="text-gray-500 text-xs font-medium">Управление общим каталогом</p>
         </div>
         <button 
-          onClick={openAdd}
-          className="bg-brand-600 hover:bg-brand-500 text-white p-3 rounded-full shadow-lg shadow-brand-600/30 transition-all"
+          onClick={() => { setIsEditing(null); setFormData({ category: ProductCategory.STEAM, stock: 1 }); setShowAddModal(true); }} 
+          className="bg-brand-600 text-white p-3 rounded-2xl shadow-lg shadow-brand-500/20 active:scale-90 transition-all"
         >
           <Plus size={24} />
         </button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {products.map((p) => (
-          <div key={p.id} className="bg-gray-850 rounded-xl p-4 border border-gray-800 flex items-start gap-4">
-            <img src={p.imageUrl} className="w-16 h-16 rounded-lg object-cover bg-gray-900" alt="" />
+          <div key={p.id} className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-3 border border-gray-800/50 flex items-center gap-4">
+            <img src={p.imageUrl} className="w-14 h-14 rounded-xl object-cover bg-gray-950 border border-gray-800" alt="" />
             <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start">
-                 <h4 className="text-white font-semibold truncate pr-2">{p.title}</h4>
-                 <span className={`text-[10px] px-2 py-0.5 rounded-full ${p.stock > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {p.stock > 0 ? `Stock: ${p.stock}` : 'OOS'}
-                 </span>
-              </div>
-              <p className="text-gray-500 text-xs truncate mt-1">{p.id}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-brand-400 font-bold">${p.price}</span>
-                <span className="text-gray-600 text-xs">| {p.category}</span>
+              <h4 className="text-white text-sm font-bold truncate">{p.title}</h4>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-brand-400 font-black text-sm">${p.price}</span>
+                <span className="text-gray-600 text-[10px] font-bold uppercase tracking-tighter bg-gray-800 px-1.5 py-0.5 rounded">{p.category}</span>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <button onClick={() => openEdit(p)} className="p-2 bg-gray-800 text-blue-400 rounded-lg hover:bg-gray-700">
-                <Edit2 size={16} />
-              </button>
-              <button onClick={() => handleDelete(p.id)} className="p-2 bg-gray-800 text-red-400 rounded-lg hover:bg-gray-700">
-                <Trash2 size={16} />
-              </button>
+            <div className="flex gap-1">
+              <button onClick={() => { setFormData(p); setIsEditing(p.id); setShowAddModal(true); }} className="p-2 text-gray-400 hover:text-white transition-colors"><Edit2 size={18} /></button>
+              <button onClick={async () => { if (confirm('Удалить?')) { await db.deleteProduct(p.id); refreshData(); } }} className="p-2 text-gray-600 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
             </div>
           </div>
         ))}
+        {products.length === 0 && (
+          <div className="text-center py-10 text-gray-600 font-medium border-2 border-dashed border-gray-900 rounded-3xl">
+            Товаров пока нет. Нажмите + чтобы добавить.
+          </div>
+        )}
       </div>
 
-      {/* Add/Edit Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-0">
-          <div className="bg-gray-900 w-full max-w-md rounded-2xl border border-gray-800 max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center z-10">
-              <h3 className="text-lg font-bold text-white">{isEditing ? 'Edit Product' : 'Add New Product'}</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white">
-                <X size={24} />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-gray-950 w-full max-w-md rounded-3xl border border-gray-800 shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-900 flex justify-between items-center">
+              <h3 className="text-xl font-black text-white">{isEditing ? 'Правка' : 'Новый товар'}</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-white transition-colors"><X size={24} /></button>
             </div>
             
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-gray-400 text-xs mb-1">Product Title</label>
+            <div className="p-6 space-y-5 overflow-y-auto no-scrollbar">
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Изображение</label>
+                <div 
+                  onClick={() => !isUploading && fileInputRef.current?.click()}
+                  className={`relative aspect-video w-full bg-gray-900 rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center group ${
+                    isUploading ? 'border-brand-500 bg-brand-500/5' : 'border-gray-800 hover:border-gray-700'
+                  }`}
+                >
+                  {isUploading ? (
+                    <div className="flex flex-col items-center gap-3">
+                       <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+                       <span className="text-xs font-bold text-brand-400">Загружаем...</span>
+                    </div>
+                  ) : formData.imageUrl ? (
+                    <>
+                      <img src={formData.imageUrl} className="w-full h-full object-cover opacity-50 group-hover:opacity-30 transition-opacity" alt="Preview" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <Upload size={24} className="text-white mb-2 drop-shadow-lg" />
+                        <span className="text-white text-[10px] font-black uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded-full backdrop-blur-md">Заменить фото</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-gray-600 group-hover:text-gray-400 transition-colors">
+                      <ImageIcon size={40} className="mb-2 opacity-20" />
+                      <span className="text-xs font-bold uppercase tracking-widest">Выбрать файл</span>
+                      <span className="text-[9px] mt-1 font-medium opacity-50">JPG, PNG up to 5MB</span>
+                    </div>
+                  )}
+                  <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Название</label>
                 <input 
-                  className="w-full bg-gray-800 text-white rounded-lg p-3 border border-gray-700 focus:border-brand-500 focus:outline-none"
-                  value={formData.title || ''}
-                  onChange={e => setFormData({...formData, title: e.target.value})}
-                  placeholder="e.g., CS2 Prime Account"
+                  className="w-full bg-gray-900 text-white rounded-2xl p-4 border border-gray-800 focus:border-brand-500 focus:outline-none transition-all placeholder:text-gray-700 font-bold text-sm" 
+                  value={formData.title || ''} 
+                  onChange={e => setFormData({...formData, title: e.target.value})} 
+                  placeholder="Напр: Аккаунт Steam с CS2" 
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Категория</label>
+                <div className="relative">
+                   <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4" />
+                   <select 
+                    className="w-full bg-gray-900 text-white rounded-2xl p-4 pl-10 border border-gray-800 focus:border-brand-500 focus:outline-none font-bold text-sm appearance-none"
+                    value={formData.category}
+                    onChange={e => setFormData({...formData, category: e.target.value as ProductCategory})}
+                   >
+                     {Object.values(ProductCategory).map(cat => (
+                       <option key={cat} value={cat}>{cat}</option>
+                     ))}
+                   </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="block text-gray-400 text-xs mb-1">Price ($)</label>
-                   <div className="relative">
-                     <DollarSign className="absolute left-3 top-3 text-gray-500 w-4 h-4" />
-                     <input 
-                       type="number"
-                       className="w-full bg-gray-800 text-white rounded-lg p-3 pl-9 border border-gray-700 focus:border-brand-500 focus:outline-none"
-                       value={formData.price || ''}
-                       onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})}
-                     />
-                   </div>
-                </div>
-                <div>
-                   <label className="block text-gray-400 text-xs mb-1">Stock</label>
-                   <div className="relative">
-                     <Package className="absolute left-3 top-3 text-gray-500 w-4 h-4" />
-                     <input 
-                       type="number"
-                       className="w-full bg-gray-800 text-white rounded-lg p-3 pl-9 border border-gray-700 focus:border-brand-500 focus:outline-none"
-                       value={formData.stock || ''}
-                       onChange={e => setFormData({...formData, stock: parseInt(e.target.value)})}
-                     />
-                   </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-xs mb-1">Category</label>
-                <select 
-                   className="w-full bg-gray-800 text-white rounded-lg p-3 border border-gray-700 focus:border-brand-500 focus:outline-none appearance-none"
-                   value={formData.category}
-                   onChange={e => setFormData({...formData, category: e.target.value as ProductCategory})}
-                >
-                  {Object.values(ProductCategory).map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-xs mb-1">Description</label>
-                <textarea 
-                  className="w-full bg-gray-800 text-white rounded-lg p-3 border border-gray-700 focus:border-brand-500 focus:outline-none h-20"
-                  value={formData.description || ''}
-                  onChange={e => setFormData({...formData, description: e.target.value})}
-                  placeholder="Product details..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-xs mb-1">Delivery Data (Hidden from store, sent to buyer)</label>
-                <textarea 
-                  className="w-full bg-gray-800 text-green-400 font-mono text-sm rounded-lg p-3 border border-gray-700 focus:border-green-500 focus:outline-none h-24"
-                  value={formData.autoDeliveryData || ''}
-                  onChange={e => setFormData({...formData, autoDeliveryData: e.target.value})}
-                  placeholder="Login:User&#10;Pass:123"
-                />
-              </div>
-
-               <div>
-                <label className="block text-gray-400 text-xs mb-1">Image URL</label>
-                <div className="flex gap-2">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Цена ($)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4" />
                     <input 
-                    className="flex-1 bg-gray-800 text-white rounded-lg p-3 border border-gray-700 focus:border-brand-500 focus:outline-none"
-                    value={formData.imageUrl || ''}
-                    onChange={e => setFormData({...formData, imageUrl: e.target.value})}
+                      type="number" 
+                      className="w-full bg-gray-900 text-white rounded-2xl p-4 pl-10 border border-gray-800 focus:border-brand-500 focus:outline-none font-bold text-sm" 
+                      value={formData.price || ''} 
+                      onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} 
+                      placeholder="0.00" 
                     />
-                    <div className="w-12 h-12 bg-gray-800 rounded-lg overflow-hidden border border-gray-700">
-                        {formData.imageUrl && <img src={formData.imageUrl} className="w-full h-full object-cover" />}
-                    </div>
+                  </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Наличие</label>
+                  <div className="relative">
+                    <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4" />
+                    <input 
+                      type="number" 
+                      className="w-full bg-gray-900 text-white rounded-2xl p-4 pl-10 border border-gray-800 focus:border-brand-500 focus:outline-none font-bold text-sm" 
+                      value={formData.stock || ''} 
+                      onChange={e => setFormData({...formData, stock: parseInt(e.target.value)})} 
+                      placeholder="0" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Автовыдача (Данные)</label>
+                <textarea 
+                  className="w-full bg-gray-900 text-brand-400 font-mono text-xs rounded-2xl p-4 border border-gray-800 focus:border-brand-500 focus:outline-none h-24 resize-none shadow-inner" 
+                  value={formData.autoDeliveryData || ''} 
+                  onChange={e => setFormData({...formData, autoDeliveryData: e.target.value})} 
+                  placeholder="login:password или ссылка на скачивание" 
+                />
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-800">
+            <div className="p-6 border-t border-gray-900">
               <button 
-                onClick={handleSave}
-                className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+                onClick={handleSave} 
+                disabled={isUploading}
+                className={`w-full font-black py-4 rounded-2xl flex items-center justify-center gap-2 shadow-xl transition-all active:scale-95 ${
+                    isUploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-500/20'
+                }`}
               >
-                <Save size={20} />
-                Save Product
+                {!isUploading && <Save size={20} />}
+                {isUploading ? 'Загрузка...' : isEditing ? 'Сохранить изменения' : 'Опубликовать'}
               </button>
             </div>
           </div>
