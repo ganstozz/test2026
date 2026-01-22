@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDb';
 import { Product, ProductCategory } from '../types';
-import { Plus, Trash2, Edit2, Package, Save, X, DollarSign, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Edit2, Package, Save, X, DollarSign } from 'lucide-react';
 
 const AdminPanel: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);

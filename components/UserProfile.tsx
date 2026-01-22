@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDb';
 import { User, Transaction, Order } from '../types';
-import { User as UserIcon, Wallet, Clock, ChevronRight, Settings, Plus, Copy, Check, ShoppingBag } from 'lucide-react';
+import { Wallet, Plus, Copy, Check, ShoppingBag } from 'lucide-react';
 
 const UserProfile: React.FC = () => {
   const [user, setUser] = useState<User>(db.getUser());

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Home, User, ShoppingBag, LayoutDashboard } from 'lucide-react';
+import { Home, User, LayoutDashboard } from 'lucide-react';
 import Storefront from './components/Storefront';
 import AdminPanel from './components/AdminPanel';
 import UserProfile from './components/UserProfile';
