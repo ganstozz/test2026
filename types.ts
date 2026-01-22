@@ -1,3 +1,4 @@
+
 export enum ProductCategory {
   STEAM = 'STEAM',
   EMAIL = 'EMAIL',
@@ -52,6 +53,14 @@ declare global {
         ready: () => void;
         expand: () => void;
         close: () => void;
+        // Fix: Added missing Telegram WebApp methods and properties
+        setHeaderColor: (color: string) => void;
+        setBackgroundColor: (color: string) => void;
+        HapticFeedback?: {
+          impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+          notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
+          selectionChanged: () => void;
+        };
         MainButton: {
           text: string;
           show: () => void;

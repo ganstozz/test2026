@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Home, User, ShoppingBag, LayoutDashboard } from 'lucide-react';
 import Storefront from './components/Storefront';
@@ -16,40 +17,41 @@ const App: React.FC = () => {
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
-      tg.expand(); // Opens app to full height
-
-      // Handle Back Button
-      const backButton = tg.BackButton;
+      tg.expand();
       
+      // Apply theme colors to header
+      tg.setHeaderColor('#0b0f19');
+      tg.setBackgroundColor('#0b0f19');
+
       const handleBack = () => {
+        if (window.Telegram.WebApp.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+        }
         setActiveTab('store');
       };
 
       if (activeTab !== 'store') {
-        backButton.show();
-        backButton.onClick(handleBack);
+        tg.BackButton.show();
+        tg.BackButton.onClick(handleBack);
       } else {
-        backButton.hide();
-        backButton.offClick(handleBack);
+        tg.BackButton.hide();
+        tg.BackButton.offClick(handleBack);
       }
 
-      // Try to get real Telegram user data
       const tgUser = tg.initDataUnsafe?.user;
       if (tgUser) {
         const currentUser = db.getUser();
-        // Update mock DB with real Telegram info if changed
         if (currentUser.id !== String(tgUser.id)) {
            db.updateUser({
              ...currentUser,
              id: String(tgUser.id),
              username: tgUser.username || tgUser.first_name || 'User',
-             avatarUrl: tgUser.photo_url || currentUser.avatarUrl
+             avatarUrl: tgUser.photo_url || `https://ui-avatars.com/api/?name=${tgUser.first_name}&background=6366f1&color=fff`
            });
         }
       }
     }
 
-    // Polling for admin status
     const checkAdmin = () => {
       const user = db.getUser();
       setIsAdmin(user.isAdmin);
@@ -57,17 +59,25 @@ const App: React.FC = () => {
     checkAdmin();
     const interval = setInterval(checkAdmin, 1000);
     return () => clearInterval(interval);
-  }, [activeTab]); // Re-run when tab changes to update BackButton
+  }, [activeTab]);
 
   const handlePurchase = (product: Product) => {
+    // Native haptic feedback
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+    }
+
     const result = db.purchaseProduct(product.id);
     if (result.success) {
-      showNotification(result.message, 'success');
-      setActiveTab('profile'); 
+      showNotification('Success! Item delivered to your profile.', 'success');
+      setTimeout(() => setActiveTab('profile'), 1500); 
     } else {
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+      }
       showNotification(result.message, 'error');
       if (result.message === 'Insufficient funds') {
-        setTimeout(() => setActiveTab('profile'), 1000); 
+        setTimeout(() => setActiveTab('profile'), 1500); 
       }
     }
   };
@@ -77,58 +87,62 @@ const App: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  const switchTab = (tab: 'store' | 'admin' | 'profile') => {
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+    }
+    setActiveTab(tab);
+  };
+
   return (
     <div className="min-h-screen bg-[#0b0f19] text-gray-100 font-sans selection:bg-brand-500/30">
-      
-      {/* Main Content Area */}
       <main className="max-w-md mx-auto min-h-screen relative bg-[#0b0f19] shadow-2xl overflow-hidden">
         
-        {/* Content based on tab */}
-        <div className="animate-in fade-in duration-300">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             {activeTab === 'store' && <Storefront onPurchase={handlePurchase} />}
             {activeTab === 'admin' && <AdminPanel />}
             {activeTab === 'profile' && <UserProfile />}
         </div>
 
-        {/* Bottom Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none">
-            <div className="w-full max-w-md bg-[#111827]/90 backdrop-blur-xl border-t border-gray-800 pointer-events-auto pb-safe">
+        {/* Navigation */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none px-4 pb-6">
+            <div className="w-full max-w-sm bg-gray-900/80 backdrop-blur-2xl border border-white/10 pointer-events-auto rounded-2xl shadow-2xl overflow-hidden">
                 <div className="flex justify-around items-center h-16">
                     <button 
-                        onClick={() => setActiveTab('store')}
-                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === 'store' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
+                        onClick={() => switchTab('store')}
+                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${activeTab === 'store' ? 'text-brand-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}
                     >
-                        <Home size={22} strokeWidth={activeTab === 'store' ? 2.5 : 2} />
-                        <span className="text-[10px] font-medium">Store</span>
+                        <Home size={20} className={activeTab === 'store' ? 'scale-110 transition-transform' : ''} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Store</span>
                     </button>
                     
                     {isAdmin && (
                         <button 
-                            onClick={() => setActiveTab('admin')}
-                            className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === 'admin' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
+                            onClick={() => switchTab('admin')}
+                            className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${activeTab === 'admin' ? 'text-brand-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}
                         >
-                            <LayoutDashboard size={22} strokeWidth={activeTab === 'admin' ? 2.5 : 2} />
-                            <span className="text-[10px] font-medium">Admin</span>
+                            <LayoutDashboard size={20} className={activeTab === 'admin' ? 'scale-110 transition-transform' : ''} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Admin</span>
                         </button>
                     )}
 
                     <button 
-                        onClick={() => setActiveTab('profile')}
-                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === 'profile' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
+                        onClick={() => switchTab('profile')}
+                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${activeTab === 'profile' ? 'text-brand-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}
                     >
-                        <User size={22} strokeWidth={activeTab === 'profile' ? 2.5 : 2} />
-                        <span className="text-[10px] font-medium">Profile</span>
+                        <User size={20} className={activeTab === 'profile' ? 'scale-110 transition-transform' : ''} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Profile</span>
                     </button>
                 </div>
             </div>
         </div>
 
-        {/* Notification Toast */}
+        {/* Notification */}
         {notification && (
-            <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce-in ${
-                notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in slide-in-from-top-4 duration-300 ${
+                notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
             }`}>
-                <span className="font-bold text-sm">{notification.msg}</span>
+                <span className="font-bold text-sm tracking-wide">{notification.msg}</span>
             </div>
         )}
 
